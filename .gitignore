@@ -1,0 +1,18 @@
+# Ignore virtual environment
+venv/
+.env
+
+# Ignore large datasets
+data/ml-25m/
+data/*.zip
+data/u.data
+data/u.item
+data/u.user
+
+# Ignore caches
+*.pyc
+__pycache__/
+*.json
+
+# Do NOT ignore your final dataset
+!data/movies_final_updated.csv

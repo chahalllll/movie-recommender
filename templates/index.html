@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Movie Recommender — OTT UI</title>
+<link rel="icon" href="" />
+<style>
+:root {
+  --bg:#071018; --card:#0c0f12; --accent:#e50914; --muted:#9aa3ae; --text:#e6eef6;
+}
+*{box-sizing:border-box}
+body{margin:0;background:linear-gradient(180deg,#07101a 0%,#0b0f14 100%);color:var(--text);font-family:Inter,ui-sans-serif,system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial}
+header{display:flex;align-items:center;gap:14px;padding:18px 28px;border-bottom:1px solid rgba(255,255,255,0.02)}
+.logo{width:48px;height:48px;border-radius:8px;background:linear-gradient(135deg,#0b0d10,#111417);display:flex;align-items:center;justify-content:center;font-weight:800;color:var(--accent)}
+.container{max-width:1200px;margin:28px auto;padding:0 20px}
+.hero{display:flex;align-items:center;gap:20px;justify-content:space-between}
+.title{font-size:28px;font-weight:700}
+.searchbar{display:flex;gap:10px;align-items:center}
+.search-input{padding:12px 14px;border-radius:8px;background:transparent;border:1px solid rgba(255,255,255,0.04);min-width:360px;color:var(--text)}
+.search-btn{background:var(--accent);color:white;padding:12px 16px;border-radius:8px;border:none;cursor:pointer;font-weight:700}
+.suggestions{position:relative}
+.suggestions-list{position:absolute;left:0;top:46px;background:#0d1113;border:1px solid rgba(255,255,255,0.03);width:100%;z-index:60;border-radius:8px;padding:8px;box-shadow:0 8px 30px rgba(0,0,0,0.6)}
+.suggestions-list div{padding:8px;border-radius:6px;cursor:pointer}
+.suggestions-list div:hover{background:#111318}
+.note{color:var(--muted);margin-top:6px;font-size:13px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:18px;margin-top:24px}
+.card{background:linear-gradient(180deg,rgba(255,255,255,0.02),transparent);border-radius:10px;padding:8px;border:1px solid rgba(255,255,255,0.03);overflow:hidden;position:relative;transition:transform .18s, box-shadow .18s}
+.card:hover{transform:translateY(-6px);box-shadow:0 20px 50px rgba(0,0,0,0.6)}
+.poster{width:100%;height:240px;object-fit:cover;border-radius:6px}
+.meta{padding:8px 6px}
+.mtitle{font-weight:700;font-size:14px;margin:0 0 6px}
+.sub{color:var(--muted);font-size:13px}
+.score{font-size:12px;color:#d1d7db;margin-top:6px}
+.controls{display:flex;gap:12px;align-items:center}
+.toggle{cursor:pointer;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.03)}
+.row{margin-top:28px}
+.row-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.carousel{display:flex;gap:12px;overflow-x:auto;padding-bottom:6px}
+.carousel::-webkit-scrollbar{height:8px}
+.carousel::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.06);border-radius:8px}
+.skeleton{background:linear-gradient(90deg,#0b0d10 0%,#0f1316 50%,#0b0d10 100%);height:240px;border-radius:6px;animation:shimmer 1.2s infinite}
+@keyframes shimmer{0%{background-position:-400px 0}100%{background-position:400px 0}}
+.modal{position:fixed;left:0;top:0;width:100%;height:100%;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);z-index:180}
+.modal-inner{width:92%;max-width:980px;background:#071018;padding:18px;border-radius:10px;border:1px solid rgba(255,255,255,0.03)}
+.modal-close{position:absolute;right:14px;top:14px;background:#111;border-radius:999px;padding:8px;cursor:pointer}
+.trailer{width:100%;height:420px;border-radius:8px;background:black}
+.badge{display:inline-block;padding:6px 8px;border-radius:6px;background:rgba(255,255,255,0.03);font-size:12px;margin-right:6px}
+@media (max-width:700px){.poster{height:200px}.search-input{min-width:180px}}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">MR</div>
+  <div>
+    <div style="font-weight:800">Movie Recommender</div>
+    <div style="color:var(--muted);font-size:13px">TF-IDF • Cosine similarity • TMDB posters</div>
+  </div>
+
+  <div style="margin-left:auto;display:flex;gap:10px;align-items:center">
+    <div class="toggle" id="themeToggle">Toggle Theme</div>
+  </div>
+</header>
+
+<div class="container">
+  <div class="hero">
+    <div>
+      <div class="title">Find movies you’ll love</div>
+      <div class="note">Type a movie name (partial/full). Autosuggest & fuzzy matching help.</div>
+    </div>
+
+    <div class="searchbar">
+      <div class="suggestions">
+        <input id="q" class="search-input" placeholder="e.g., Dangal, Inception, 3 Idiots" autocomplete="off">
+        <div id="slist" class="suggestions-list" style="display:none"></div>
+      </div>
+      <button id="go" class="search-btn">Recommend</button>
+    </div>
+  </div>
+
+  <div id="error" style="margin-top:16px;color:#ffb4b4"></div>
+
+  <div id="resultsArea">
+    <!-- matched text -->
+    <div id="matched" style="margin-top:18px;color:var(--muted)"></div>
+    <!-- main grid -->
+    <div id="grid" class="grid"></div>
+  </div>
+
+  <!-- trending row (carousel) -->
+  <div id="trendingRow" class="row" style="display:none">
+    <div class="row-header"><div style="font-weight:700">Trending</div></div>
+    <div id="trending" class="carousel"></div>
+  </div>
+
+</div>
+
+<!-- modal -->
+<div id="modal" class="modal">
+  <div class="modal-inner">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div style="font-weight:800" id="modalTitle"></div>
+      <div class="modal-close" id="modalClose">✕</div>
+    </div>
+    <div id="modalBody" style="margin-top:12px"></div>
+  </div>
+</div>
+
+<script>
+const slist = document.getElementById("slist");
+const qinput = document.getElementById("q");
+const go = document.getElementById("go");
+const grid = document.getElementById("grid");
+const errorBox = document.getElementById("error");
+const matchedBox = document.getElementById("matched");
+const modal = document.getElementById("modal");
+const modalTitle = document.getElementById("modalTitle");
+const modalBody = document.getElementById("modalBody");
+const modalClose = document.getElementById("modalClose");
+
+// debounce helper
+function debounce(fn, delay){ let t; return (...args)=>{ clearTimeout(t); t=setTimeout(()=>fn(...args), delay); }}
+
+// autosuggest
+qinput.addEventListener("input", debounce(async function(e){
+  const v = e.target.value.trim();
+  if(!v){ slist.style.display="none"; return; }
+  try{
+    const res = await fetch(`/suggest?q=${encodeURIComponent(v)}`);
+    const j = await res.json();
+    slist.innerHTML = "";
+    j.suggestions.slice(0,8).forEach(s=>{
+      const d = document.createElement("div");
+      d.textContent = s;
+      d.onclick = ()=>{ qinput.value = s; slist.style.display="none"; doSearch(); }
+      slist.appendChild(d);
+    });
+    if(j.suggestions.length) slist.style.display="block"; else slist.style.display="none";
+  }catch(err){ slist.style.display="none"; }
+},250));
+
+// perform search
+async function doSearch(){
+  const q = qinput.value.trim();
+  if(!q){ errorBox.textContent = "Please enter a movie name."; return; }
+  errorBox.textContent = "";
+  matchedBox.textContent = "";
+  grid.innerHTML = "";
+  // show skeletons
+  for(let i=0;i<8;i++){
+    const sk = document.createElement("div"); sk.className="card";
+    sk.innerHTML = '<div class="skeleton"></div>';
+    grid.appendChild(sk);
+  }
+
+  try{
+    const r = await fetch("/api/recommend", {
+      method:"POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({q:q, top:12})
+    });
+    const j = await r.json();
+    grid.innerHTML = "";
+    if(j.error){ errorBox.textContent = j.error; matchedBox.textContent = ""; return; }
+    if(j.matched){ matchedBox.innerHTML = "Results for: <strong>"+j.matched+"</strong>"; }
+    if(j.results && j.results.length){
+      j.results.forEach(item => {
+        const c = document.createElement("div"); c.className="card";
+        const poster = item.poster_url ? `<img class="poster" src="${item.poster_url}" alt="${item.title}">` :
+          '<div style="height:240px;display:flex;align-items:center;justify-content:center;background:#0b0d10;border-radius:6px;color:var(--muted)">No poster</div>';
+        c.innerHTML = poster + `<div class="meta"><div class="mtitle">${item.title}</div>
+           <div class="sub">${item.genres} ${item.year? ' • '+item.year : ''}</div>
+           <div class="score">Similarity: ${item.score}</div></div>`;
+        c.onclick = ()=>openModal(item);
+        grid.appendChild(c);
+      });
+      // show trending row (re-use results)
+      const trending = document.getElementById("trending");
+      trending.innerHTML = "";
+      j.results.slice(0,8).forEach(item=>{
+        const c = document.createElement("div"); c.className="card"; c.style.minWidth="160px";
+        const poster = item.poster_url ? `<img class="poster" src="${item.poster_url}" alt="${item.title}">` :
+          '<div style="height:140px;display:flex;align-items:center;justify-content:center;background:#0b0d10;border-radius:6px;color:var(--muted)">No poster</div>';
+        c.innerHTML = poster + `<div class="meta"><div class="mtitle">${item.title}</div></div>`;
+        trending.appendChild(c);
+      });
+      document.getElementById("trendingRow").style.display = "block";
+    } else {
+      errorBox.textContent = "No recommendations found.";
+    }
+  }catch(err){ console.error(err); errorBox.textContent = "Server error or network issue."; }
+}
+
+go.addEventListener("click", ()=>doSearch());
+qinput.addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefault(); doSearch(); } });
+
+function openModal(item){
+  modalTitle.textContent = item.title;
+  modalBody.innerHTML = '<div style="display:flex;gap:18px;flex-wrap:wrap"><div style="flex:1;min-width:260px">' +
+    (item.poster_url? `<img src="${item.poster_url}" style="width:100%;border-radius:6px">` : '') +
+    '</div><div style="flex:2;min-width:260px"><div style="font-size:14px;color:var(--muted)">Genres: '+item.genres+'</div>' +
+    '<div style="margin-top:10px;">Loading description + trailer...</div></div></div>';
+  // fetch TMDB meta (trailer and overview)
+  fetch(`/api/movie_meta?title=${encodeURIComponent(item.title)}&year=${encodeURIComponent(item.year||"")}`)
+    .then(r=>r.json()).then(j=>{
+      const m = j.meta;
+      let more = `<div style="margin-top:10px;color:var(--muted)">${m && m.release_date? 'Released: '+m.release_date : ''}</div>`;
+      more += `<div style="margin-top:12px">Rating: ${m && m.rating? m.rating : 'N/A'}</div>`;
+      if(m && m.trailer){
+        more += `<div style="margin-top:12px"><a href="${m.trailer}" target="_blank" style="color:var(--accent)">Watch trailer on YouTube</a></div>`;
+      }
+      modalBody.querySelector("div div:nth-child(2)").innerHTML = more;
+    }).catch(()=>{ /* ignore */ });
+  modal.style.display = "flex";
+}
+
+modalClose.onclick = ()=>{ modal.style.display = "none"; }
+modal.onclick = (e)=>{ if(e.target === modal) modal.style.display = "none"; }
+
+// theme toggle
+document.getElementById("themeToggle").addEventListener("click", ()=>{
+  const r = document.documentElement;
+  if(r.style.getPropertyValue("--bg")==="#071018"){
+    r.style.setProperty("--bg", "#f6f7fb");
+    r.style.setProperty("--card", "#ffffff");
+    r.style.setProperty("--accent", "#0b7cff");
+    r.style.setProperty("--muted", "#6b7280");
+    r.style.setProperty("--text", "#111827");
+    document.body.style.background = "linear-gradient(180deg,#f6f7fb 0%,#e9eef6 100%)";
+  } else {
+    r.style.setProperty("--bg", "#071018");
+    r.style.setProperty("--card", "#0c0f12");
+    r.style.setProperty("--accent", "#e50914");
+    r.style.setProperty("--muted", "#9aa3ae");
+    r.style.setProperty("--text", "#e6eef6");
+    document.body.style.background = "linear-gradient(180deg,#07101a 0%,#0b0f14 100%)";
+  }
+});
+</script>
+</body>
+</html>
